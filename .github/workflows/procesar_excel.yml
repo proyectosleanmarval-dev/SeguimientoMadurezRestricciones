@@ -16,26 +16,32 @@ jobs:
 
     steps:
 
-    - name: Checkout repositorio
-      uses: actions/checkout@v4
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
 
-    - name: Configurar Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Instalar dependencias
-      run: |
-        pip install pandas openpyxl matplotlib
+      - name: Instalar dependencias
+        run: |
+          pip install pandas openpyxl matplotlib
 
-    - name: Ejecutar script
-      run: python scripts/procesar_estado_obra.py
+      - name: Ejecutar procesamiento del Excel
+        run: python scripts/procesar_estado_obra.py
 
-    - name: Commit resultados
-      run: |
-        git config --global user.name "github-actions"
-        git config --global user.email "github-actions@github.com"
-        git add data/estadoObra_filtrado.csv
-        git add data/grafico_restricciones_mes_proyecto.png
-        git commit -m "Actualización automática datos y gráfico por proyecto" || echo "No hay cambios"
-        git push
+      - name: Commit y push de resultados
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+          # Agregar archivos generados
+          git add data/*.csv || true
+          git add data/*.png || true
+
+          # Crear commit solo si hay cambios
+          git diff --cached --quiet || git commit -m "Actualización automática datos y gráficos"
+
+          # Push
+          git push
