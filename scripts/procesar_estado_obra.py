@@ -12,18 +12,6 @@ grafico_output = "data/grafico_restricciones_3_meses.png"
 proyectos_sin_output = "data/proyectos_sin_registros.csv"
 
 # -----------------------------
-# COLUMNAS REQUERIDAS
-# -----------------------------
-
-columnas_requeridas = [
-    "descSucursal",
-    "descProyecto",
-    "Actividad",
-    "tipoRestriccion",
-    "fechaRegistro"
-]
-
-# -----------------------------
 # LISTADO COMPLETO PROYECTOS BOGOTA
 # -----------------------------
 
@@ -49,11 +37,27 @@ try:
     # LEER EXCEL
     # -----------------------------
 
-    df = pd.read_excel(input_file)
+    df = pd.read_excel(input_file, header=0)
 
-    df.columns = df.columns.str.strip()
+    # limpiar encabezados
+    df.columns = (
+        df.columns
+        .astype(str)
+        .str.strip()
+        .str.replace("\n","")
+        .str.replace("\r","")
+    )
 
-    # validar columnas
+    print("Columnas detectadas:", list(df.columns))
+
+    columnas_requeridas = [
+        "descSucursal",
+        "descProyecto",
+        "Actividad",
+        "tipoRestriccion",
+        "fechaRegistro"
+    ]
+
     for col in columnas_requeridas:
         if col not in df.columns:
             raise Exception(f"Falta la columna {col} en el Excel")
@@ -64,10 +68,14 @@ try:
     # FILTRAR SUCURSAL BOGOTA
     # -----------------------------
 
-    df = df[df["descSucursal"].astype(str).str.contains("BOGOTA", case=False, na=False)]
+    df = df[
+        df["descSucursal"]
+        .astype(str)
+        .str.contains("BOGOTA", case=False, na=False)
+    ]
 
     # -----------------------------
-    # NORMALIZAR TEXTO
+    # NORMALIZAR PROYECTOS
     # -----------------------------
 
     df["descProyecto"] = (
@@ -82,10 +90,13 @@ try:
     # FECHA
     # -----------------------------
 
-    df["fechaRegistro"] = pd.to_datetime(df["fechaRegistro"], errors="coerce")
+    df["fechaRegistro"] = pd.to_datetime(
+        df["fechaRegistro"],
+        errors="coerce"
+    )
 
     # -----------------------------
-    # GUARDAR CSV FILTRADO
+    # GUARDAR CSV
     # -----------------------------
 
     df.to_csv(csv_output, index=False)
@@ -106,10 +117,10 @@ try:
         "proyecto_sin_registros": proyectos_sin_registros
     }).to_csv(proyectos_sin_output, index=False)
 
-    print("Listado de proyectos sin registros generado")
+    print("Listado proyectos sin registros generado")
 
     # -----------------------------
-    # PREPARAR MESES
+    # CALCULAR MESES
     # -----------------------------
 
     df["mes"] = df["fechaRegistro"].dt.to_period("M")
@@ -120,15 +131,19 @@ try:
     mes_anterior = mes_actual - 1
     mes_antepasado = mes_actual - 2
 
-    meses_interes = [mes_antepasado, mes_anterior, mes_actual]
+    meses_interes = [
+        mes_antepasado,
+        mes_anterior,
+        mes_actual
+    ]
 
     # -----------------------------
-    # BASE COMPLETA
+    # BASE COMPLETA PROYECTOS × MESES
     # -----------------------------
 
     base_completa = pd.MultiIndex.from_product(
         [proyectos_bogota, meses_interes],
-        names=["descProyecto", "mes"]
+        names=["descProyecto","mes"]
     )
 
     df_3m = df[df["mes"].isin(meses_interes)]
@@ -142,7 +157,7 @@ try:
 
     tabla = tabla.reindex(base_completa, fill_value=0)
 
-    # convertir a float (evita error int64)
+    # convertir a float para permitir valores pequeños
     tabla = tabla.astype(float)
 
     # -----------------------------
@@ -153,29 +168,22 @@ try:
 
     sin_datos = tabla.sum(axis=1) == 0
 
-    tabla.loc[sin_datos, "SIN REGISTROS"] = 0.01
+    tabla.loc[sin_datos,"SIN REGISTROS"] = 0.01
 
-    # -----------------------------
-    # ETIQUETAS
-    # -----------------------------
-
+    # etiquetas
     tabla.index = [
         f"{proyecto} - {mes}"
         for proyecto, mes in tabla.index
     ]
 
     # -----------------------------
-    # COLORES
+    # GRAFICO
     # -----------------------------
 
     colores = list(plt.cm.tab20.colors)
 
     if "SIN REGISTROS" in tabla.columns:
         colores = colores[:len(tabla.columns)-1] + ["red"]
-
-    # -----------------------------
-    # GRAFICO
-    # -----------------------------
 
     fig, ax = plt.subplots(figsize=(15,18))
 
@@ -188,20 +196,17 @@ try:
 
     ax.set_title(
         "Restricciones por proyecto - últimos 3 meses",
-        fontsize=16,
-        pad=20
+        fontsize=16
     )
 
     ax.set_xlabel("Número de registros")
     ax.set_ylabel("Proyecto / Mes")
 
     plt.legend(
-        title="Tipo de restricción",
+        title="Tipo restricción",
         bbox_to_anchor=(1.02,1),
         loc="upper left"
     )
-
-    plt.subplots_adjust(right=0.75)
 
     plt.tight_layout()
 
