@@ -1,11 +1,11 @@
 import pandas as pd
-import os
+import matplotlib.pyplot as plt
+from datetime import datetime
 
-# Archivo de entrada
+# Archivos
 input_file = "data/estadoObra.xlsx"
-
-# Archivo de salida
-output_file = "data/estadoObra_filtrado.csv"
+csv_output = "data/estadoObra_filtrado.csv"
+grafico_output = "data/grafico_restricciones_mes.png"
 
 # Columnas requeridas
 columnas_requeridas = [
@@ -18,32 +18,63 @@ columnas_requeridas = [
 
 try:
 
-    # Leer hoja específica
+    # Leer hoja
     df = pd.read_excel(input_file, sheet_name="Restricciones")
 
-    # Limpiar espacios en nombres de columnas
+    # Limpiar columnas
     df.columns = df.columns.str.strip()
 
-    # Verificar columnas existentes
+    # Validar columnas
     columnas_faltantes = [c for c in columnas_requeridas if c not in df.columns]
-
     if columnas_faltantes:
-        raise ValueError(f"Faltan columnas en el Excel: {columnas_faltantes}")
+        raise ValueError(f"Faltan columnas: {columnas_faltantes}")
 
-    # Mantener solo columnas requeridas
+    # Mantener columnas necesarias
     df = df[columnas_requeridas]
 
-    # Filtrar por sucursal
+    # Filtrar sucursal
     df = df[df["descSucursal"].str.contains("BOGOTA ", na=False)]
 
-    # Convertir fecha si es necesario
+    # Convertir fecha
     df["fechaRegistro"] = pd.to_datetime(df["fechaRegistro"], errors="coerce")
 
-    # Guardar resultado
-    df.to_csv(output_file, index=False)
+    # Guardar CSV filtrado
+    df.to_csv(csv_output, index=False)
 
-    print("Archivo procesado correctamente")
+    print("CSV generado")
+
+    # -----------------------------
+    # FILTRO MES ACTUAL
+    # -----------------------------
+
+    hoy = datetime.now()
+
+    df_mes = df[
+        (df["fechaRegistro"].dt.month == hoy.month) &
+        (df["fechaRegistro"].dt.year == hoy.year)
+    ]
+
+    # Conteo por tipo de restricción
+    conteo = df_mes["tipoRestriccion"].value_counts()
+
+    # -----------------------------
+    # GRAFICO BARRAS HORIZONTALES
+    # -----------------------------
+
+    plt.figure()
+
+    conteo.sort_values().plot(kind="barh")
+
+    plt.title("Restricciones registradas este mes")
+    plt.xlabel("Número de registros")
+    plt.ylabel("Tipo de restricción")
+
+    plt.tight_layout()
+
+    plt.savefig(grafico_output)
+
+    print("Gráfico generado")
 
 except Exception as e:
-    print(f"Error procesando el archivo: {e}")
+    print(f"Error procesando archivo: {e}")
     raise
