@@ -49,9 +49,14 @@ try:
     # LEER EXCEL
     # -----------------------------
 
-    df = pd.read_excel(input_file, sheet_name="Restricciones")
+    df = pd.read_excel(input_file)
 
     df.columns = df.columns.str.strip()
+
+    # validar columnas
+    for col in columnas_requeridas:
+        if col not in df.columns:
+            raise Exception(f"Falta la columna {col} en el Excel")
 
     df = df[columnas_requeridas]
 
@@ -59,7 +64,7 @@ try:
     # FILTRAR SUCURSAL BOGOTA
     # -----------------------------
 
-    df = df[df["descSucursal"].str.contains("BOGOTA ", na=False)]
+    df = df[df["descSucursal"].astype(str).str.contains("BOGOTA", case=False, na=False)]
 
     # -----------------------------
     # NORMALIZAR TEXTO
@@ -74,7 +79,7 @@ try:
     )
 
     # -----------------------------
-    # CONVERTIR FECHA
+    # FECHA
     # -----------------------------
 
     df["fechaRegistro"] = pd.to_datetime(df["fechaRegistro"], errors="coerce")
@@ -88,7 +93,7 @@ try:
     print("CSV filtrado generado")
 
     # -----------------------------
-    # IDENTIFICAR PROYECTOS SIN REGISTROS
+    # PROYECTOS SIN REGISTROS
     # -----------------------------
 
     proyectos_excel = set(df["descProyecto"].dropna().unique())
@@ -118,7 +123,7 @@ try:
     meses_interes = [mes_antepasado, mes_anterior, mes_actual]
 
     # -----------------------------
-    # BASE COMPLETA (todos los proyectos)
+    # BASE COMPLETA
     # -----------------------------
 
     base_completa = pd.MultiIndex.from_product(
@@ -137,8 +142,11 @@ try:
 
     tabla = tabla.reindex(base_completa, fill_value=0)
 
+    # convertir a float (evita error int64)
+    tabla = tabla.astype(float)
+
     # -----------------------------
-    # INDICADOR ROJO SI NO HAY DATOS
+    # INDICADOR SIN REGISTROS
     # -----------------------------
 
     tabla["SIN REGISTROS"] = 0
@@ -148,7 +156,7 @@ try:
     tabla.loc[sin_datos, "SIN REGISTROS"] = 0.01
 
     # -----------------------------
-    # ETIQUETAS EJE Y
+    # ETIQUETAS
     # -----------------------------
 
     tabla.index = [
