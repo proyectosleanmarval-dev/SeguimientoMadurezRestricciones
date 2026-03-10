@@ -50,8 +50,37 @@ df = df[df["descSucursal"] == "BOGOTA"]
 proyectos = sorted(df["descProyecto"].dropna().unique())
 categorias = sorted(df["tipoRestriccion"].dropna().unique())
 
+# Función para crear abreviaturas de 3 letras
+def crear_abreviatura(categoria, longitud=3):
+    """
+    Crea una abreviatura de 3 letras para cada categoría
+    """
+    palabras = categoria.split()
+    
+    if len(palabras) >= 3:
+        # Tomar primera letra de las primeras 3 palabras
+        abrev = ''.join([p[0] for p in palabras[:3]])
+    elif len(palabras) == 2:
+        # Tomar primeras 2 letras de la primera palabra y primera de la segunda
+        abrev = palabras[0][:2] + palabras[1][0]
+    else:
+        # Para una sola palabra, tomar las primeras 3 letras
+        abrev = categoria[:3]
+    
+    return abrev.upper()
+
+# Diccionario de abreviaturas para cada categoría
+abreviaturas = {cat: crear_abreviatura(cat) for cat in categorias}
+
+# Diccionario para mapear abreviatura a categoría completa (para referencia)
+categoria_por_abrev = {v: k for k, v in abreviaturas.items()}
+
+print("Abreviaturas generadas:")
+for cat, abrev in abreviaturas.items():
+    print(f"  {abrev}: {cat}")
+
 # colores - paleta más suave y distinguishable
-colores = plt.cm.Set3.colors  # Cambio a una paleta más suave
+colores = plt.cm.Set3.colors
 color_categoria = {cat: colores[i % len(colores)] for i, cat in enumerate(categorias)}
 
 # -----------------------------
@@ -115,25 +144,25 @@ t_ante = preparar(df_ante)
 # -----------------------------
 # gráfico
 # -----------------------------
-altura = max(10, len(proyectos) * 1.5)  # Ajuste de altura
+altura = max(10, len(proyectos) * 1.5)
 
 fig, ax = plt.subplots(figsize=(22, altura))
 
 y = np.arange(len(proyectos))
 
-# Ajuste de offsets para evitar superposición de etiquetas
-offset = 0.35  # Reducido ligeramente
-bar_height = 0.25  # Reducido para más espacio
+offset = 0.35
+bar_height = 0.25
 
 bottom_actual = [0]*len(proyectos)
 bottom_pasado = [0]*len(proyectos)
 bottom_ante = [0]*len(proyectos)
 
 # -----------------------------
-# barras apiladas con etiquetas de categoría
+# barras apiladas con etiquetas de categoría (3 letras)
 # -----------------------------
 for cat in categorias:
     color = color_categoria[cat]
+    abrev = abreviaturas[cat]  # Obtener abreviatura de 3 letras
 
     v1 = t_actual[cat].values
     v2 = t_pasado[cat].values
@@ -148,41 +177,52 @@ for cat in categorias:
     bars3 = ax.barh([i+offset for i in y], v3, height=bar_height,
                     left=bottom_ante, color=color, edgecolor='white', linewidth=0.5)
 
-    # Etiquetas dentro de segmentos: número + abreviatura de categoría
+    # Etiquetas dentro de segmentos: número + abreviatura de 3 letras
     for bar, val in zip(bars1, v1):
         if val > 0:
-            # Mostrar número y abreviatura de categoría
-            cat_abbr = ''.join([word[0] for word in cat.split()])[:3]  # Abreviatura de 3 letras
             ax.text(bar.get_x() + bar.get_width()/2,
                     bar.get_y() + bar.get_height()/2,
-                    f'{int(val)}\n{cat_abbr}', 
-                    ha='center', va='center', fontsize=6, linespacing=0.8,
-                    bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.7, edgecolor='none'))
+                    f'{int(val)}\n{abrev}', 
+                    ha='center', va='center', fontsize=7, linespacing=0.8,
+                    fontweight='bold',
+                    bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
     for bar, val in zip(bars2, v2):
         if val > 0:
-            cat_abbr = ''.join([word[0] for word in cat.split()])[:3]
             ax.text(bar.get_x() + bar.get_width()/2,
                     bar.get_y() + bar.get_height()/2,
-                    f'{int(val)}\n{cat_abbr}', 
-                    ha='center', va='center', fontsize=6, linespacing=0.8,
-                    bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.7, edgecolor='none'))
+                    f'{int(val)}\n{abrev}', 
+                    ha='center', va='center', fontsize=7, linespacing=0.8,
+                    fontweight='bold',
+                    bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
     for bar, val in zip(bars3, v3):
         if val > 0:
-            cat_abbr = ''.join([word[0] for word in cat.split()])[:3]
             ax.text(bar.get_x() + bar.get_width()/2,
                     bar.get_y() + bar.get_height()/2,
-                    f'{int(val)}\n{cat_abbr}', 
-                    ha='center', va='center', fontsize=6, linespacing=0.8,
-                    bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.7, edgecolor='none'))
+                    f'{int(val)}\n{abrev}', 
+                    ha='center', va='center', fontsize=7, linespacing=0.8,
+                    fontweight='bold',
+                    bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
     bottom_actual = [a+b for a,b in zip(bottom_actual, v1)]
     bottom_pasado = [a+b for a,b in zip(bottom_pasado, v2)]
     bottom_ante = [a+b for a,b in zip(bottom_ante, v3)]
 
 # -----------------------------
-# títulos de mes en cada barra (ahora en los extremos para evitar superposición)
+# Leyenda de abreviaturas (opcional, para referencia)
+# -----------------------------
+# Crear una pequeña leyenda en la esquina superior derecha
+legend_text = "Abreviaturas:\n" + "\n".join([f"{abrev}: {cat}" for cat, abrev in abreviaturas.items()])
+ax.text(0.98, 0.98, legend_text,
+        transform=ax.transAxes,
+        fontsize=8,
+        verticalalignment='top',
+        horizontalalignment='right',
+        bbox=dict(boxstyle="round,pad=0.5", facecolor='white', alpha=0.9, edgecolor='gray'))
+
+# -----------------------------
+# títulos de mes en cada barra (en los extremos)
 # -----------------------------
 for i in range(len(proyectos)):
     total1 = t_actual.iloc[i].sum()
@@ -191,44 +231,43 @@ for i in range(len(proyectos)):
     
     max_width = max(total1, total2, total3)
     
-    # Posicionar etiquetas de mes en los extremos de las barras
     if total1 > 0:
         ax.text(max_width + 0.5, i-offset, mes_actual_txt,
                 ha='left', va='center', fontsize=8, fontweight='bold',
-                bbox=dict(boxstyle="round,pad=0.2", facecolor='lightblue', alpha=0.8))
+                bbox=dict(boxstyle="round,pad=0.2", facecolor='lightblue', alpha=0.8, edgecolor='gray'))
 
     if total2 > 0:
         ax.text(max_width + 0.5, i, mes_pasado_txt,
                 ha='left', va='center', fontsize=8, fontweight='bold',
-                bbox=dict(boxstyle="round,pad=0.2", facecolor='lightgreen', alpha=0.8))
+                bbox=dict(boxstyle="round,pad=0.2", facecolor='lightgreen', alpha=0.8, edgecolor='gray'))
 
     if total3 > 0:
         ax.text(max_width + 0.5, i+offset, mes_ante_txt,
                 ha='left', va='center', fontsize=8, fontweight='bold',
-                bbox=dict(boxstyle="round,pad=0.2", facecolor='lightcoral', alpha=0.8))
+                bbox=dict(boxstyle="round,pad=0.2", facecolor='lightcoral', alpha=0.8, edgecolor='gray'))
 
 # -----------------------------
-# separadores proyecto (más sutiles)
+# separadores proyecto
 # -----------------------------
 for i in range(len(proyectos)):
     ax.axhline(i+0.5, color='gray', linewidth=0.2, linestyle='--', alpha=0.5)
 
 # -----------------------------
-# etiquetas proyectos con mejor formato
+# etiquetas proyectos
 # -----------------------------
 ax.set_yticks(list(y))
 ax.set_yticklabels(proyectos, fontsize=9, fontweight='bold')
 
-# Ajustar límites del eje x para dar espacio a las etiquetas de mes
+# Ajustar límites del eje x
 max_total = max(t_actual.sum(axis=1).max(), 
                 t_pasado.sum(axis=1).max(), 
                 t_ante.sum(axis=1).max())
-ax.set_xlim(0, max_total + 3)
+ax.set_xlim(0, max_total + 4)
 
-plt.subplots_adjust(left=0.35)  # Más espacio para nombres largos
+plt.subplots_adjust(left=0.35)
 
 # -----------------------------
-# título y subtítulo
+# título
 # -----------------------------
 ax.set_title(
     "RESTRICCIONES POR PROYECTO - BOGOTÁ\nComparación últimos 3 meses",
@@ -238,8 +277,6 @@ ax.set_title(
 )
 
 ax.set_xlabel("Cantidad de restricciones", fontsize=11, fontweight='bold')
-
-# Eliminar grid vertical que pueda causar ruido
 ax.grid(axis='x', alpha=0.2)
 
 # -----------------------------
@@ -255,4 +292,9 @@ plt.savefig(
     edgecolor='none'
 )
 
-print("Gráfico generado correctamente con las mejoras visuales")
+print("\n" + "="*50)
+print("GRÁFICO GENERADO CORRECTAMENTE")
+print("="*50)
+print("\nAbreviaturas de categorías (3 letras):")
+for cat, abrev in abreviaturas.items():
+    print(f"  {abrev} : {cat}")
