@@ -1,223 +1,185 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+import os
 
-# -----------------------------
-# ARCHIVOS
-# -----------------------------
+archivo_excel = "data/estadoObra.xlsx"
 
-input_file = "data/estadoObra.xlsx"
-csv_output = "data/estadoObra_filtrado.csv"
-grafico_output = "data/grafico_restricciones_3_meses.png"
-proyectos_sin_output = "data/proyectos_sin_registros.csv"
+# --------------------------------
+# Verificar hojas disponibles
+# --------------------------------
+xls = pd.ExcelFile(archivo_excel, engine="openpyxl")
+print("Hojas disponibles en el archivo:")
+print(xls.sheet_names)
 
-# -----------------------------
-# LISTADO COMPLETO PROYECTOS BOGOTA
-# -----------------------------
+if "Restricciones" not in xls.sheet_names:
+    raise Exception(
+        f"La hoja 'Restricciones' no existe. Hojas encontradas: {xls.sheet_names}"
+    )
 
-proyectos_bogota = [
-"ABADIA SAN RAFAEL","ARAGON","BAVIERA","BURDEOS CIUDAD LA SALLE",
-"BURGOS CASTILLA RESERVADO","CADIZ","CHAMONIX CIUDAD LA SALLE",
-"EL CAMPO","EL CASTELL IBERIA RESERVADO","GALLET CIUDAD LA SALLE",
-"IZOLA ZENTRAL-CITIZZEN","LA ALMERIA ALSACIA RESERVADO","LA CABRERA",
-"LA CRUZ","LA PALMA","LA PEÑA","LA SCALA","LA TERRA ALSACIA RESERVADO",
-"LINZ E1","LOIRA CIUDAD LA SALLE","LORCA","LYON 2 CIUDAD LA SALLE",
-"LYON CIUDAD LA SALLE","METROPOLI 30","MONTPELLIER CIUDAD LA SALLE",
-"PASEO DE SEVILLA","PASEO SAN RAFAEL","PEÑAZUL EL POBLADO",
-"PEÑON DE ALICANTE","PROVENZA PRESTIGE","SAINT MICHEL CIUDAD LA SALLE",
-"SAN LUCAS LA QUINTA","SAN MATEO - LA QUINTA","SAN SEBASTIAN LA QUINTA",
-"SAN SIMON LA QUINTA","URB EXTERNO CIUDAD LA SALLE",
-"URBANISMO EXTERNO LOTE 5 BANCA","URBANISMO TRES QUEBRADAS",
-"VERDANIA BOSQUES DE GUAYMARAL","ZURI - ZENTRAL"
+# --------------------------------
+# Leer hoja correcta
+# --------------------------------
+df = pd.read_excel(
+    xls,
+    sheet_name="Restricciones"
+)
+
+# limpiar nombres de columnas
+df.columns = df.columns.str.strip()
+
+print("Columnas detectadas:", list(df.columns))
+
+# --------------------------------
+# Validar columnas necesarias
+# --------------------------------
+columnas_requeridas = [
+    "descSucursal",
+    "descProyecto",
+    "tipoRestriccion",
+    "fechaRegistro"
 ]
 
-try:
+for col in columnas_requeridas:
+    if col not in df.columns:
+        raise Exception(f"Falta la columna {col} en la hoja Restricciones")
 
-    # -----------------------------
-    # LEER EXCEL
-    # -----------------------------
+# --------------------------------
+# Normalizar datos
+# --------------------------------
+df["fechaRegistro"] = pd.to_datetime(df["fechaRegistro"], errors="coerce")
 
-    df = pd.read_excel(input_file, header=0)
+df["descProyecto"] = df["descProyecto"].astype(str).str.upper()
 
-    # limpiar encabezados
-    df.columns = (
-        df.columns
-        .astype(str)
-        .str.strip()
-        .str.replace("\n","")
-        .str.replace("\r","")
-    )
+# lista completa de proyectos
+proyectos = sorted(df["descProyecto"].dropna().unique())
 
-    print("Columnas detectadas:", list(df.columns))
+# categorías de restricción
+categorias = sorted(df["tipoRestriccion"].dropna().unique())
 
-    columnas_requeridas = [
-        "descSucursal",
-        "descProyecto",
-        "Actividad",
-        "tipoRestriccion",
-        "fechaRegistro"
+# --------------------------------
+# Definir meses
+# --------------------------------
+hoy = datetime.today()
+
+mes_actual = hoy.month
+anio_actual = hoy.year
+
+mes_pasado = mes_actual - 1 if mes_actual > 1 else 12
+anio_mes_pasado = anio_actual if mes_actual > 1 else anio_actual - 1
+
+mes_antepasado = mes_actual - 2
+anio_mes_antepasado = anio_actual
+
+if mes_antepasado <= 0:
+    mes_antepasado += 12
+    anio_mes_antepasado -= 1
+
+
+def filtrar_mes(df, mes, anio):
+    return df[
+        (df["fechaRegistro"].dt.month == mes) &
+        (df["fechaRegistro"].dt.year == anio)
     ]
 
-    for col in columnas_requeridas:
-        if col not in df.columns:
-            raise Exception(f"Falta la columna {col} en el Excel")
 
-    df = df[columnas_requeridas]
+df_mes_actual = filtrar_mes(df, mes_actual, anio_actual)
+df_mes_pasado = filtrar_mes(df, mes_pasado, anio_mes_pasado)
+df_mes_antepasado = filtrar_mes(df, mes_antepasado, anio_mes_antepasado)
 
-    # -----------------------------
-    # FILTRAR SUCURSAL BOGOTA
-    # -----------------------------
+# --------------------------------
+# Preparar tabla de conteos
+# --------------------------------
+def preparar(df_mes):
 
-    df = df[
-        df["descSucursal"]
-        .astype(str)
-        .str.contains("BOGOTA", case=False, na=False)
-    ]
+    data = []
 
-    # -----------------------------
-    # NORMALIZAR PROYECTOS
-    # -----------------------------
+    for proyecto in proyectos:
 
-    df["descProyecto"] = (
-        df["descProyecto"]
-        .astype(str)
-        .str.upper()
-        .str.strip()
-        .str.replace(r"\s+", " ", regex=True)
+        df_p = df_mes[df_mes["descProyecto"] == proyecto]
+
+        conteos = []
+
+        for cat in categorias:
+            conteos.append((df_p["tipoRestriccion"] == cat).sum())
+
+        data.append(conteos)
+
+    return pd.DataFrame(data, columns=categorias, index=proyectos)
+
+
+tabla_actual = preparar(df_mes_actual)
+tabla_pasado = preparar(df_mes_pasado)
+tabla_antepasado = preparar(df_mes_antepasado)
+
+# --------------------------------
+# Crear gráfico
+# --------------------------------
+fig, ax = plt.subplots(figsize=(16, 10))
+
+y = range(len(proyectos))
+
+offset = 0.25
+
+bottom_actual = [0]*len(proyectos)
+bottom_pasado = [0]*len(proyectos)
+bottom_antepasado = [0]*len(proyectos)
+
+for cat in categorias:
+
+    vals_actual = tabla_actual[cat].values
+    vals_pasado = tabla_pasado[cat].values
+    vals_antepasado = tabla_antepasado[cat].values
+
+    ax.barh(
+        [i-offset for i in y],
+        vals_actual,
+        left=bottom_actual
     )
 
-    # -----------------------------
-    # FECHA
-    # -----------------------------
-
-    df["fechaRegistro"] = pd.to_datetime(
-        df["fechaRegistro"],
-        errors="coerce"
+    ax.barh(
+        y,
+        vals_pasado,
+        left=bottom_pasado
     )
 
-    # -----------------------------
-    # GUARDAR CSV
-    # -----------------------------
-
-    df.to_csv(csv_output, index=False)
-
-    print("CSV filtrado generado")
-
-    # -----------------------------
-    # PROYECTOS SIN REGISTROS
-    # -----------------------------
-
-    proyectos_excel = set(df["descProyecto"].dropna().unique())
-
-    proyectos_sin_registros = sorted(
-        set(proyectos_bogota) - proyectos_excel
+    ax.barh(
+        [i+offset for i in y],
+        vals_antepasado,
+        left=bottom_antepasado
     )
 
-    pd.DataFrame({
-        "proyecto_sin_registros": proyectos_sin_registros
-    }).to_csv(proyectos_sin_output, index=False)
+    bottom_actual = [a+b for a,b in zip(bottom_actual, vals_actual)]
+    bottom_pasado = [a+b for a,b in zip(bottom_pasado, vals_pasado)]
+    bottom_antepasado = [a+b for a,b in zip(bottom_antepasado, vals_antepasado)]
 
-    print("Listado proyectos sin registros generado")
+# barras mínimas para proyectos sin registros
+for i in range(len(proyectos)):
 
-    # -----------------------------
-    # CALCULAR MESES
-    # -----------------------------
+    if bottom_actual[i] == 0:
+        ax.barh(i-offset, 0.05, color="red")
 
-    df["mes"] = df["fechaRegistro"].dt.to_period("M")
+    if bottom_pasado[i] == 0:
+        ax.barh(i, 0.05, color="red")
 
-    hoy = datetime.now()
+    if bottom_antepasado[i] == 0:
+        ax.barh(i+offset, 0.05, color="red")
 
-    mes_actual = pd.Period(hoy.strftime("%Y-%m"))
-    mes_anterior = mes_actual - 1
-    mes_antepasado = mes_actual - 2
+ax.set_yticks(list(y))
+ax.set_yticklabels(proyectos)
 
-    meses_interes = [
-        mes_antepasado,
-        mes_anterior,
-        mes_actual
-    ]
+ax.set_title(
+    "Restricciones registradas por proyecto - últimos 3 meses",
+    fontsize=14,
+    pad=20
+)
 
-    # -----------------------------
-    # BASE COMPLETA PROYECTOS × MESES
-    # -----------------------------
+ax.set_xlabel("Cantidad de restricciones")
 
-    base_completa = pd.MultiIndex.from_product(
-        [proyectos_bogota, meses_interes],
-        names=["descProyecto","mes"]
-    )
+plt.tight_layout()
 
-    df_3m = df[df["mes"].isin(meses_interes)]
+os.makedirs("data", exist_ok=True)
 
-    tabla = (
-        df_3m
-        .groupby(["descProyecto","mes","tipoRestriccion"])
-        .size()
-        .unstack(fill_value=0)
-    )
+plt.savefig("data/grafico_restricciones_mes_proyecto.png")
 
-    tabla = tabla.reindex(base_completa, fill_value=0)
-
-    # convertir a float para permitir valores pequeños
-    tabla = tabla.astype(float)
-
-    # -----------------------------
-    # INDICADOR SIN REGISTROS
-    # -----------------------------
-
-    tabla["SIN REGISTROS"] = 0
-
-    sin_datos = tabla.sum(axis=1) == 0
-
-    tabla.loc[sin_datos,"SIN REGISTROS"] = 0.01
-
-    # etiquetas
-    tabla.index = [
-        f"{proyecto} - {mes}"
-        for proyecto, mes in tabla.index
-    ]
-
-    # -----------------------------
-    # GRAFICO
-    # -----------------------------
-
-    colores = list(plt.cm.tab20.colors)
-
-    if "SIN REGISTROS" in tabla.columns:
-        colores = colores[:len(tabla.columns)-1] + ["red"]
-
-    fig, ax = plt.subplots(figsize=(15,18))
-
-    tabla.plot(
-        kind="barh",
-        stacked=True,
-        ax=ax,
-        color=colores
-    )
-
-    ax.set_title(
-        "Restricciones por proyecto - últimos 3 meses",
-        fontsize=16
-    )
-
-    ax.set_xlabel("Número de registros")
-    ax.set_ylabel("Proyecto / Mes")
-
-    plt.legend(
-        title="Tipo restricción",
-        bbox_to_anchor=(1.02,1),
-        loc="upper left"
-    )
-
-    plt.tight_layout()
-
-    plt.savefig(
-        grafico_output,
-        dpi=300
-    )
-
-    print("Gráfico generado correctamente")
-
-except Exception as e:
-
-    print(f"Error procesando el archivo: {e}")
-    raise
+print("Gráfico generado correctamente")
