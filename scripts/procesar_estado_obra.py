@@ -28,46 +28,19 @@ columnas_requeridas = [
 # -----------------------------
 
 proyectos_bogota = [
-"Abadia San Rafael",
-"Aragon",
-"Baviera",
-"Burdeos Ciudad La Salle",
-"Burgos Castilla Reservado",
-"Cadiz",
-"Chamonix Ciudad La Salle",
-"El Campo",
-"El Castell Iberia Reservado",
-"Gallet Ciudad La Salle",
-"Izola Zentral-citizzen",
-"La Almeria Alsacia Reservado",
-"La Cabrera",
-"La Cruz",
-"La Palma",
-"La Peña",
-"La Scala",
-"La Terra Alsacia Reservado",
-"Linz E1",
-"Loira Ciudad La Salle",
-"Lorca",
-"Lyon 2 Ciudad La Salle",
-"Lyon Ciudad La Salle",
-"Metropoli 30",
-"Montpellier Ciudad La Salle",
-"Paseo De Sevilla",
-"Paseo San Rafael",
-"Peñazul El Poblado",
-"Peñon De Alicante",
-"Provenza Prestige",
-"Saint Michel Ciudad La Salle",
-"San Lucas La Quinta",
-"San Mateo - La Quinta",
-"San Sebastian La Quinta",
-"San Simon La Quinta",
-"Urb Externo Ciudad La Salle",
-"Urbanismo Externo Lote 5 Banca",
-"Urbanismo Tres Quebradas",
-"Verdania Bosques De Guaymaral",
-"Zuri - Zentral"
+"ABADIA SAN RAFAEL","ARAGON","BAVIERA","BURDEOS CIUDAD LA SALLE",
+"BURGOS CASTILLA RESERVADO","CADIZ","CHAMONIX CIUDAD LA SALLE",
+"EL CAMPO","EL CASTELL IBERIA RESERVADO","GALLET CIUDAD LA SALLE",
+"IZOLA ZENTRAL-CITIZZEN","LA ALMERIA ALSACIA RESERVADO","LA CABRERA",
+"LA CRUZ","LA PALMA","LA PEÑA","LA SCALA","LA TERRA ALSACIA RESERVADO",
+"LINZ E1","LOIRA CIUDAD LA SALLE","LORCA","LYON 2 CIUDAD LA SALLE",
+"LYON CIUDAD LA SALLE","METROPOLI 30","MONTPELLIER CIUDAD LA SALLE",
+"PASEO DE SEVILLA","PASEO SAN RAFAEL","PEÑAZUL EL POBLADO",
+"PEÑON DE ALICANTE","PROVENZA PRESTIGE","SAINT MICHEL CIUDAD LA SALLE",
+"SAN LUCAS LA QUINTA","SAN MATEO - LA QUINTA","SAN SEBASTIAN LA QUINTA",
+"SAN SIMON LA QUINTA","URB EXTERNO CIUDAD LA SALLE",
+"URBANISMO EXTERNO LOTE 5 BANCA","URBANISMO TRES QUEBRADAS",
+"VERDANIA BOSQUES DE GUAYMARAL","ZURI - ZENTRAL"
 ]
 
 try:
@@ -78,16 +51,8 @@ try:
 
     df = pd.read_excel(input_file, sheet_name="Restricciones")
 
-    # limpiar nombres columnas
     df.columns = df.columns.str.strip()
 
-    # validar columnas
-    columnas_faltantes = [c for c in columnas_requeridas if c not in df.columns]
-
-    if columnas_faltantes:
-        raise ValueError(f"Faltan columnas en el Excel: {columnas_faltantes}")
-
-    # mantener columnas necesarias
     df = df[columnas_requeridas]
 
     # -----------------------------
@@ -95,6 +60,18 @@ try:
     # -----------------------------
 
     df = df[df["descSucursal"].str.contains("BOGOTA ", na=False)]
+
+    # -----------------------------
+    # NORMALIZAR TEXTO
+    # -----------------------------
+
+    df["descProyecto"] = (
+        df["descProyecto"]
+        .astype(str)
+        .str.upper()
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+    )
 
     # -----------------------------
     # CONVERTIR FECHA
@@ -120,16 +97,14 @@ try:
         set(proyectos_bogota) - proyectos_excel
     )
 
-    df_sin = pd.DataFrame({
+    pd.DataFrame({
         "proyecto_sin_registros": proyectos_sin_registros
-    })
-
-    df_sin.to_csv(proyectos_sin_output, index=False)
+    }).to_csv(proyectos_sin_output, index=False)
 
     print("Listado de proyectos sin registros generado")
 
     # -----------------------------
-    # PREPARAR DATOS PARA GRAFICO
+    # PREPARAR MESES
     # -----------------------------
 
     df["mes"] = df["fechaRegistro"].dt.to_period("M")
@@ -142,58 +117,83 @@ try:
 
     meses_interes = [mes_antepasado, mes_anterior, mes_actual]
 
-    df_3m = df[df["mes"].isin(meses_interes)]
+    # -----------------------------
+    # BASE COMPLETA (todos los proyectos)
+    # -----------------------------
 
-    # -----------------------------
-    # AGRUPAR PROYECTO / MES / RESTRICCION
-    # -----------------------------
+    base_completa = pd.MultiIndex.from_product(
+        [proyectos_bogota, meses_interes],
+        names=["descProyecto", "mes"]
+    )
+
+    df_3m = df[df["mes"].isin(meses_interes)]
 
     tabla = (
         df_3m
-        .groupby(["descProyecto", "mes", "tipoRestriccion"])
+        .groupby(["descProyecto","mes","tipoRestriccion"])
         .size()
         .unstack(fill_value=0)
     )
 
-    tabla = tabla.sort_index()
+    tabla = tabla.reindex(base_completa, fill_value=0)
 
-    # etiquetas eje Y
+    # -----------------------------
+    # INDICADOR ROJO SI NO HAY DATOS
+    # -----------------------------
+
+    tabla["SIN REGISTROS"] = 0
+
+    sin_datos = tabla.sum(axis=1) == 0
+
+    tabla.loc[sin_datos, "SIN REGISTROS"] = 0.01
+
+    # -----------------------------
+    # ETIQUETAS EJE Y
+    # -----------------------------
+
     tabla.index = [
-        f"{proyecto} - {str(mes)}"
+        f"{proyecto} - {mes}"
         for proyecto, mes in tabla.index
     ]
 
     # -----------------------------
-    # GENERAR GRAFICO
+    # COLORES
     # -----------------------------
 
-    fig, ax = plt.subplots(figsize=(14, 12))
+    colores = list(plt.cm.tab20.colors)
+
+    if "SIN REGISTROS" in tabla.columns:
+        colores = colores[:len(tabla.columns)-1] + ["red"]
+
+    # -----------------------------
+    # GRAFICO
+    # -----------------------------
+
+    fig, ax = plt.subplots(figsize=(15,18))
 
     tabla.plot(
         kind="barh",
         stacked=True,
-        ax=ax
+        ax=ax,
+        color=colores
     )
 
     ax.set_title(
-        "Restricciones por proyecto en los últimos 3 meses",
+        "Restricciones por proyecto - últimos 3 meses",
         fontsize=16,
         pad=20
     )
 
     ax.set_xlabel("Número de registros")
-    ax.set_ylabel("Proyecto y mes")
+    ax.set_ylabel("Proyecto / Mes")
 
     plt.legend(
         title="Tipo de restricción",
-        bbox_to_anchor=(1.02, 1),
+        bbox_to_anchor=(1.02,1),
         loc="upper left"
     )
 
-    plt.subplots_adjust(
-        top=0.9,
-        right=0.75
-    )
+    plt.subplots_adjust(right=0.75)
 
     plt.tight_layout()
 
