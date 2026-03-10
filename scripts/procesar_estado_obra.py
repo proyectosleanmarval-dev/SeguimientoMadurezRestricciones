@@ -18,10 +18,10 @@ columnas_requeridas = [
 
 try:
 
-    # Leer hoja
+    # Leer Excel
     df = pd.read_excel(input_file, sheet_name="Restricciones")
 
-    # Limpiar nombres de columnas
+    # Limpiar columnas
     df.columns = df.columns.str.strip()
 
     # Validar columnas
@@ -44,7 +44,7 @@ try:
     print("CSV generado")
 
     # -----------------------------
-    # FILTRO MES ACTUAL
+    # FILTRAR MES ACTUAL
     # -----------------------------
 
     hoy = datetime.now()
@@ -55,7 +55,7 @@ try:
     ]
 
     # -----------------------------
-    # AGRUPAR PROYECTO + RESTRICCION
+    # TABLA PROYECTO vs RESTRICCION
     # -----------------------------
 
     tabla = (
@@ -65,24 +65,43 @@ try:
         .unstack(fill_value=0)
     )
 
+    # Ordenar proyectos por total
+    tabla["Total"] = tabla.sum(axis=1)
+    tabla = tabla.sort_values("Total")
+    tabla = tabla.drop(columns="Total")
+
     # -----------------------------
-    # GRAFICO
+    # GRAFICO APILADO
     # -----------------------------
 
-    plt.figure(figsize=(12,8))
+    fig, ax = plt.subplots(figsize=(14, 10))
 
     tabla.plot(
         kind="barh",
-        stacked=False
+        stacked=True,
+        ax=ax
     )
 
-    plt.title("Restricciones registradas este mes por proyecto")
-    plt.xlabel("Número de registros")
-    plt.ylabel("Proyecto")
+    ax.set_title(
+        "Restricciones registradas en el mes actual por proyecto",
+        fontsize=16,
+        pad=20
+    )
+
+    ax.set_xlabel("Número de registros")
+    ax.set_ylabel("Proyecto")
+
+    plt.legend(
+        title="Tipo de restricción",
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left"
+    )
+
+    plt.subplots_adjust(top=0.90, right=0.75)
 
     plt.tight_layout()
 
-    plt.savefig(grafico_output)
+    plt.savefig(grafico_output, dpi=300)
 
     print("Gráfico generado")
 
