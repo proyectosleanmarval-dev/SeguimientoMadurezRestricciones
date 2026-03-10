@@ -5,6 +5,9 @@ on:
     paths:
       - 'data/estadoObra.xlsx'
 
+permissions:
+  contents: write
+
 jobs:
 
   procesar_excel:
@@ -13,10 +16,10 @@ jobs:
 
     steps:
 
-    - name: Clonar repositorio
+    - name: Checkout repositorio
       uses: actions/checkout@v4
 
-    - name: Instalar Python
+    - name: Configurar Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
@@ -25,13 +28,13 @@ jobs:
       run: |
         pip install pandas openpyxl
 
-    - name: Ejecutar procesamiento
+    - name: Ejecutar procesamiento del Excel
       run: python scripts/procesar_estado_obra.py
 
-    - name: Commit archivo generado
+    - name: Commit y push del archivo generado
       run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
         git add data/estadoObra_filtrado.csv
-        git commit -m "Actualización automática archivo filtrado" || echo "Sin cambios"
+        git commit -m "Actualización automática archivo filtrado" || echo "No hay cambios para commit"
         git push
