@@ -12,10 +12,9 @@ archivo_excel = "data/estadoObra.xlsx"
 xls = pd.ExcelFile(archivo_excel, engine="openpyxl")
 
 if "Restricciones" not in xls.sheet_names:
-    raise Exception(f"La hoja 'Restricciones' no existe. Hojas encontradas: {xls.sheet_names}")
+    raise Exception("La hoja 'Restricciones' no existe")
 
 df = pd.read_excel(xls, sheet_name="Restricciones")
-
 df.columns = df.columns.str.strip()
 
 # -----------------------------
@@ -33,7 +32,7 @@ for col in columnas_requeridas:
         raise Exception(f"Falta la columna {col}")
 
 # -----------------------------
-# Normalizar datos
+# Normalizar
 # -----------------------------
 df["fechaRegistro"] = pd.to_datetime(df["fechaRegistro"], errors="coerce")
 df["descProyecto"] = df["descProyecto"].astype(str).str.upper()
@@ -52,11 +51,7 @@ categorias = sorted(df["tipoRestriccion"].dropna().unique())
 
 # colores
 colores = plt.cm.tab20.colors
-
-color_categoria = {
-    cat: colores[i % len(colores)]
-    for i, cat in enumerate(categorias)
-}
+color_categoria = {cat: colores[i % len(colores)] for i, cat in enumerate(categorias)}
 
 # -----------------------------
 # meses
@@ -69,19 +64,19 @@ anio_actual = hoy.year
 mes_pasado = mes_actual-1 if mes_actual > 1 else 12
 anio_pasado = anio_actual if mes_actual > 1 else anio_actual-1
 
-mes_antepasado = mes_actual-2
-anio_antepasado = anio_actual
+mes_ante = mes_actual-2
+anio_ante = anio_actual
 
-if mes_antepasado <= 0:
-    mes_antepasado += 12
-    anio_antepasado -= 1
+if mes_ante <= 0:
+    mes_ante += 12
+    anio_ante -= 1
 
 mes_actual_txt = calendar.month_abbr[mes_actual].upper()
 mes_pasado_txt = calendar.month_abbr[mes_pasado].upper()
-mes_ante_txt = calendar.month_abbr[mes_antepasado].upper()
+mes_ante_txt = calendar.month_abbr[mes_ante].upper()
 
 # -----------------------------
-# filtrar meses
+# filtro meses
 # -----------------------------
 def filtrar(df, mes, anio):
     return df[
@@ -91,10 +86,10 @@ def filtrar(df, mes, anio):
 
 df_actual = filtrar(df, mes_actual, anio_actual)
 df_pasado = filtrar(df, mes_pasado, anio_pasado)
-df_ante = filtrar(df, mes_antepasado, anio_antepasado)
+df_ante = filtrar(df, mes_ante, anio_ante)
 
 # -----------------------------
-# preparar tablas
+# preparar tabla
 # -----------------------------
 def preparar(df_mes):
 
@@ -105,7 +100,6 @@ def preparar(df_mes):
         df_p = df_mes[df_mes["descProyecto"] == proyecto]
 
         conteos = []
-
         for cat in categorias:
             conteos.append((df_p["tipoRestriccion"] == cat).sum())
 
@@ -120,9 +114,9 @@ t_ante = preparar(df_ante)
 # -----------------------------
 # gráfico
 # -----------------------------
-altura = max(12, len(proyectos) * 1.4)
+altura = max(12, len(proyectos) * 1.2)
 
-fig, ax = plt.subplots(figsize=(20, altura))
+fig, ax = plt.subplots(figsize=(22, altura))
 
 y = range(len(proyectos))
 
@@ -144,78 +138,78 @@ for cat in categorias:
     v2 = t_pasado[cat].values
     v3 = t_ante[cat].values
 
-    ax.barh([i-offset for i in y], v1, height=bar_height, left=bottom_actual, color=color)
-    ax.barh(y, v2, height=bar_height, left=bottom_pasado, color=color)
-    ax.barh([i+offset for i in y], v3, height=bar_height, left=bottom_ante, color=color)
+    bars1 = ax.barh([i-offset for i in y], v1, height=bar_height,
+                    left=bottom_actual, color=color, edgecolor='black')
+
+    bars2 = ax.barh(y, v2, height=bar_height,
+                    left=bottom_pasado, color=color, edgecolor='black')
+
+    bars3 = ax.barh([i+offset for i in y], v3, height=bar_height,
+                    left=bottom_ante, color=color, edgecolor='black')
+
+    # conteo dentro de segmentos
+    for bar, val in zip(bars1, v1):
+        if val > 0:
+            ax.text(bar.get_x() + bar.get_width()/2,
+                    bar.get_y() + bar.get_height()/2,
+                    str(val), ha='center', va='center', fontsize=7)
+
+    for bar, val in zip(bars2, v2):
+        if val > 0:
+            ax.text(bar.get_x() + bar.get_width()/2,
+                    bar.get_y() + bar.get_height()/2,
+                    str(val), ha='center', va='center', fontsize=7)
+
+    for bar, val in zip(bars3, v3):
+        if val > 0:
+            ax.text(bar.get_x() + bar.get_width()/2,
+                    bar.get_y() + bar.get_height()/2,
+                    str(val), ha='center', va='center', fontsize=7)
 
     bottom_actual = [a+b for a,b in zip(bottom_actual, v1)]
     bottom_pasado = [a+b for a,b in zip(bottom_pasado, v2)]
     bottom_ante = [a+b for a,b in zip(bottom_ante, v3)]
 
 # -----------------------------
-# líneas separadoras
+# títulos de mes en cada barra
 # -----------------------------
 for i in range(len(proyectos)):
-    ax.axhline(i + 0.6, color='gray', linewidth=0.3)
+
+    total1 = t_actual.iloc[i].sum()
+    total2 = t_pasado.iloc[i].sum()
+    total3 = t_ante.iloc[i].sum()
+
+    if total1 > 0:
+        ax.text(total1/2, i-offset, mes_actual_txt,
+                ha='center', va='center', fontsize=8, fontweight='bold')
+
+    if total2 > 0:
+        ax.text(total2/2, i, mes_pasado_txt,
+                ha='center', va='center', fontsize=8, fontweight='bold')
+
+    if total3 > 0:
+        ax.text(total3/2, i+offset, mes_ante_txt,
+                ha='center', va='center', fontsize=8, fontweight='bold')
+
+# -----------------------------
+# separadores proyecto
+# -----------------------------
+for i in range(len(proyectos)):
+    ax.axhline(i+0.6, color='gray', linewidth=0.3)
 
 # -----------------------------
 # etiquetas proyectos
 # -----------------------------
 ax.set_yticks(list(y))
-ax.set_yticklabels(proyectos, fontsize=8)
+ax.set_yticklabels(proyectos, fontsize=9)
 
-for label in ax.get_yticklabels():
-    label.set_horizontalalignment('right')
-
-plt.subplots_adjust(left=0.35)
-
-# -----------------------------
-# texto MES en cada barra
-# -----------------------------
-for i in range(len(proyectos)):
-
-    total_actual = t_actual.iloc[i].sum()
-    total_pasado = t_pasado.iloc[i].sum()
-    total_ante = t_ante.iloc[i].sum()
-
-    ax.text(total_actual + 0.3, i-offset,
-            f"{mes_actual_txt}",
-            fontsize=8,
-            va='center')
-
-    ax.text(total_pasado + 0.3, i,
-            f"{mes_pasado_txt}",
-            fontsize=8,
-            va='center')
-
-    ax.text(total_ante + 0.3, i+offset,
-            f"{mes_ante_txt}",
-            fontsize=8,
-            va='center')
-
-# -----------------------------
-# leyenda vertical por proyecto
-# -----------------------------
-for i, proyecto in enumerate(proyectos):
-
-    pos_y = i - 0.55
-
-    for j, cat in enumerate(categorias):
-
-        ax.text(
-            -0.2,
-            pos_y - (j*0.15),
-            cat,
-            color=color_categoria[cat],
-            fontsize=6,
-            transform=ax.get_yaxis_transform()
-        )
+plt.subplots_adjust(left=0.32)
 
 # -----------------------------
 # título
 # -----------------------------
 ax.set_title(
-"Restricciones por Proyecto - Bogotá\nÚltimos 3 Meses",
+"Restricciones por Proyecto - Bogotá\nComparación últimos 3 meses",
 fontsize=18,
 pad=30
 )
