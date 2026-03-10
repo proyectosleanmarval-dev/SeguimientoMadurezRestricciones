@@ -5,7 +5,7 @@ from datetime import datetime
 # Archivos
 input_file = "data/estadoObra.xlsx"
 csv_output = "data/estadoObra_filtrado.csv"
-grafico_output = "data/grafico_restricciones_mes.png"
+grafico_output = "data/grafico_restricciones_mes_proyecto.png"
 
 # Columnas requeridas
 columnas_requeridas = [
@@ -21,7 +21,7 @@ try:
     # Leer hoja
     df = pd.read_excel(input_file, sheet_name="Restricciones")
 
-    # Limpiar columnas
+    # Limpiar nombres de columnas
     df.columns = df.columns.str.strip()
 
     # Validar columnas
@@ -54,20 +54,31 @@ try:
         (df["fechaRegistro"].dt.year == hoy.year)
     ]
 
-    # Conteo por tipo de restricción
-    conteo = df_mes["tipoRestriccion"].value_counts()
-
     # -----------------------------
-    # GRAFICO BARRAS HORIZONTALES
+    # AGRUPAR PROYECTO + RESTRICCION
     # -----------------------------
 
-    plt.figure()
+    tabla = (
+        df_mes
+        .groupby(["descProyecto", "tipoRestriccion"])
+        .size()
+        .unstack(fill_value=0)
+    )
 
-    conteo.sort_values().plot(kind="barh")
+    # -----------------------------
+    # GRAFICO
+    # -----------------------------
 
-    plt.title("Restricciones registradas este mes")
+    plt.figure(figsize=(12,8))
+
+    tabla.plot(
+        kind="barh",
+        stacked=False
+    )
+
+    plt.title("Restricciones registradas este mes por proyecto")
     plt.xlabel("Número de registros")
-    plt.ylabel("Tipo de restricción")
+    plt.ylabel("Proyecto")
 
     plt.tight_layout()
 
