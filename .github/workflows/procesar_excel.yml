@@ -36,6 +36,6 @@ jobs:
         git config --global user.name "github-actions"
         git config --global user.email "github-actions@github.com"
         git add data/estadoObra_filtrado.csv
-        git add data/grafico_restricciones_mes.png
-        git commit -m "Actualización automática datos y gráfico" || echo "No hay cambios"
+        git add data/grafico_restricciones_mes_proyecto.png
+        git commit -m "Actualización automática datos y gráfico por proyecto" || echo "No hay cambios"
         git push
