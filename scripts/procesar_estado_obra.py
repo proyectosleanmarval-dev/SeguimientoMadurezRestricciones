@@ -5,7 +5,7 @@ from datetime import datetime
 # Archivos
 input_file = "data/estadoObra.xlsx"
 csv_output = "data/estadoObra_filtrado.csv"
-grafico_output = "data/grafico_restricciones_mes_proyecto.png"
+grafico_output = "data/grafico_restricciones_3_meses.png"
 
 # Columnas requeridas
 columnas_requeridas = [
@@ -38,43 +38,52 @@ try:
     # Convertir fecha
     df["fechaRegistro"] = pd.to_datetime(df["fechaRegistro"], errors="coerce")
 
-    # Guardar CSV filtrado
+    # Guardar CSV
     df.to_csv(csv_output, index=False)
 
     print("CSV generado")
 
-    # -----------------------------
-    # FILTRAR MES ACTUAL
-    # -----------------------------
+    # --------------------------
+    # FILTRAR ULTIMOS 3 MESES
+    # --------------------------
 
     hoy = datetime.now()
 
-    df_mes = df[
-        (df["fechaRegistro"].dt.month == hoy.month) &
-        (df["fechaRegistro"].dt.year == hoy.year)
-    ]
+    df["mes"] = df["fechaRegistro"].dt.to_period("M")
 
-    # -----------------------------
-    # TABLA PROYECTO vs RESTRICCION
-    # -----------------------------
+    mes_actual = hoy.strftime("%Y-%m")
+    mes_anterior = (pd.Period(mes_actual) - 1).strftime("%Y-%m")
+    mes_antepasado = (pd.Period(mes_actual) - 2).strftime("%Y-%m")
+
+    meses_interes = [mes_antepasado, mes_anterior, mes_actual]
+
+    df_3m = df[df["mes"].astype(str).isin(meses_interes)]
+
+    # --------------------------
+    # AGRUPAR
+    # --------------------------
 
     tabla = (
-        df_mes
-        .groupby(["descProyecto", "tipoRestriccion"])
+        df_3m
+        .groupby(["descProyecto", "mes", "tipoRestriccion"])
         .size()
         .unstack(fill_value=0)
     )
 
-    # Ordenar proyectos por total
-    tabla["Total"] = tabla.sum(axis=1)
-    tabla = tabla.sort_values("Total")
-    tabla = tabla.drop(columns="Total")
+    # Ordenar
+    tabla = tabla.sort_index()
 
-    # -----------------------------
-    # GRAFICO APILADO
-    # -----------------------------
+    # --------------------------
+    # ETIQUETAS PARA EL EJE Y
+    # --------------------------
 
-    fig, ax = plt.subplots(figsize=(14, 10))
+    tabla.index = [f"{proj} - {mes}" for proj, mes in tabla.index]
+
+    # --------------------------
+    # GRAFICO
+    # --------------------------
+
+    fig, ax = plt.subplots(figsize=(14, 12))
 
     tabla.plot(
         kind="barh",
@@ -83,13 +92,13 @@ try:
     )
 
     ax.set_title(
-        "Restricciones registradas en el mes actual por proyecto",
+        "Restricciones por proyecto en los últimos 3 meses",
         fontsize=16,
         pad=20
     )
 
     ax.set_xlabel("Número de registros")
-    ax.set_ylabel("Proyecto")
+    ax.set_ylabel("Proyecto y mes")
 
     plt.legend(
         title="Tipo de restricción",
@@ -97,7 +106,7 @@ try:
         loc="upper left"
     )
 
-    plt.subplots_adjust(top=0.90, right=0.75)
+    plt.subplots_adjust(top=0.9, right=0.75)
 
     plt.tight_layout()
 
